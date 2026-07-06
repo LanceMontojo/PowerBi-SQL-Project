@@ -55,3 +55,28 @@ This verifies that there are no duplicate values and therefore we can move to th
 </p>
 
 As shown in the results, the features Item, Price_Per_Unit, Quantity, Total_Spent, and Discount_Applied contain missing values. Since these fields are important for understanding transaction details and sales performance, further investigation is required before deciding how to handle the missing data.
+
+- The next step is to inspect these missing values and determine the most appropriate treatment method, From the table it can be seen that:
+  - Total Spent can be calculated by multiplying Price Per Unit and Quantity. However, both the Price Per Unit and Quantity columns contain missing values, making direct imputation difficult in some cases.
+  - Quantity can be derived by dividing Total Spent by Price Per Unit whenever both values are available.
+  - Price Per Unit can be inferred from the Item column. Ex. Category is Patisserie and Item_10_PAT price per unit is 18.5 so all item_10_pat have price of 18.5
+  - Item values may also be inferred using a combination of Category and Price Per Unit. For example, a record in the Patisserie category with a price per unit of 18.5 can be assigned the item value Item_10_PAT.
+  - For now, I would skip the Discount_Applied feature and come back to it later. My hope is that some of the inconsistencies observed so far can be explained once the relationships between Item, Price Per Unit, Quantity, and Total Spent have been fully established.
+  
+From the observations thus far, the easiest issue to address is the relationship between Item and Price_Per_Unit. The hypothesis is that each Item corresponds to a single price. To verify this, a query was executed to identify any items associated with more than one distinct price.
+
+ <p align = "center">
+   <img width="845" height="238" alt="image" src="https://github.com/user-attachments/assets/f4cfc49f-ca77-45d8-8dc0-4814e3962b36" />
+ </p>
+
+With it returning zero row, it confirms that no item is associated with more than one price.
+
+To further validate this relationship across the dataset, the number of distinct prices associated with each item was examined.
+<img width="940" height="412" alt="image" src="https://github.com/user-attachments/assets/0776bf8c-5780-4a0d-ae86-7df58e77ef41" />
+
+The results show that every item is associated with exactly one distinct price. Therefore, it is reasonable to use the relationship between item and price_per_unit when imputing missing values. For example, Item_1 always corresponds to a price of 5.0, Item_10 always corresponds to 18.5, and so on and so forth.
+
+As a result, records with missing item values can be inferred using their corresponding category and price information. For instance, a record belonging to the Patisserie category with a price corresponding to 18.5 can be assigned the Item value Item_10_PAT.
+<img width="1505" height="402" alt="image" src="https://github.com/user-attachments/assets/3ca616bb-7d2c-4fd1-b8cd-ba6a09b442df" />
+
+For now I would rest and the plan for the next session would be imputing values from the Item section and hopefully covers more answer so thar we can clean the dataset.
