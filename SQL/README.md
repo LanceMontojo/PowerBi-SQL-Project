@@ -79,4 +79,115 @@ The results show that every item is associated with exactly one distinct price. 
 As a result, records with missing item values can be inferred using their corresponding category and price information. For instance, a record belonging to the Patisserie category with a price corresponding to 18.5 can be assigned the Item value Item_10_PAT.
 <img width="1505" height="402" alt="image" src="https://github.com/user-attachments/assets/3ca616bb-7d2c-4fd1-b8cd-ba6a09b442df" />
 
-For now I would rest and the plan for the next session would be imputing values from the Item section and hopefully covers more answer so thar we can clean the dataset.
+Imputing the missing values in the Item feature by first confirming the relationship between each item and its corresponding Price Per Unit. Once this relationship has been verified, the Price Per Unit and Category of each record with a missing Item value are used to determine the appropriate item for imputation.
+
+```sql
+SELECT -- do not update first we will confirm before doing anything 
+    r.transaction_id, 
+    r.category,
+    r.price_per_unit,
+    r.item AS old_item,
+
+    l.item AS new_item,
+
+    -- Show the row used as the lookup
+    l.category AS lookup_category,
+    l.price_per_unit AS lookup_price,
+    l.item AS lookup_item
+
+FROM retail_sales_raw r
+
+JOIN (
+    SELECT DISTINCT
+        category,
+        price_per_unit,
+        item
+    FROM retail_sales_raw
+    WHERE item IS NOT NULL
+) l
+ON r.category = l.category
+AND r.price_per_unit = l.price_per_unit
+
+WHERE r.item IS NULL
+ORDER BY r.price_per_unit, r.category;
+```
+<img width="1391" height="407" alt="image" src="https://github.com/user-attachments/assets/ecbbca49-f1dd-4eda-b9c3-0d1c5c5bdf38" />
+
+Then we update and impute the missing values in the Item feature using the verified relationship between Category, Price Per Unit, and Item. After the update, we verify the results once again by counting the remaining missing values in the Item feature.
+
+```sql
+UPDATE retail_sales_raw r
+SET item = l.item
+FROM (
+    SELECT DISTINCT
+        category,
+        price_per_unit,
+        item
+    FROM retail_sales_raw
+    WHERE item IS NOT NULL
+) l
+WHERE r.item IS NULL
+  AND r.category = l.category
+  AND r.price_per_unit = l.price_per_unit;
+```
+<p align = "Center">
+  <img width="655" height="147" alt="image" src="https://github.com/user-attachments/assets/ffca0ce4-ee0a-42b0-b136-febdb5e861ab" />
+</p>
+
+From 1,213 missing values, we were able to reduce it to only 609. This means that 604 missing values were successfully imputed. The remaining 609 rows could not be imputed for now since they also have missing Price Per Unit values, which we need to determine the corresponding item.
+
+Now let's check for the table again and let's see what we can do from our current information.
+```sql
+select *
+from retail_sales_raw
+where item is null
+```
+<img width="1495" height="401" alt="image" src="https://github.com/user-attachments/assets/e417a1ca-d3e6-480a-88b2-f9410f667fef" />
+
+It can be seen that for the remaining 609 datapoints, both the Item and Price Per Unit features have missing values. However, it can also be seen that these records still have values in the Quantity and Total Spent features. From our earlier observations, we know that Total Spent is equal to Quantity multiplied by Price Per Unit. Therefore, we can rearrange the formula and derive the missing Price Per Unit values by dividing Total Spent by Quantity.
+
+Once the Price Per Unit has been derived, we can then infer the corresponding Item since we have already verified that each price only corresponds to one item number. Lastly, by using the Category feature, we can determine the complete item name.
+
+But first, we need to convert the data types into NUMERIC. Remember that earlier we intentionally set all the columns as TEXT to avoid problems during the import process. Since we are now going to perform arithmetic operations, the Price Per Unit, Quantity, and Total Spent features need to be converted into numeric data types because arithmetic operations cannot be performed on text values.
+
+```sql
+ALTER TABLE retail_sales_raw
+ALTER COLUMN price_per_unit TYPE NUMERIC
+USING price_per_unit::NUMERIC;
+
+ALTER TABLE retail_sales_raw
+ALTER COLUMN quantity TYPE NUMERIC
+USING quantity::NUMERIC;
+
+ALTER TABLE retail_sales_raw
+ALTER COLUMN total_spent TYPE NUMERIC
+USING total_spent::NUMERIC;
+```
+
+After converting the data types from TEXT to NUMERIC, we can now perform arithmetic operations to calculate the Price Per Unit for each item.
+``` sql
+UPDATE retail_sales_raw r
+SET
+    price_per_unit = ROUND(r.total_spent / r.quantity, 1),
+    item = l.item
+FROM (
+    SELECT DISTINCT
+        category,
+        price_per_unit,
+        item
+    FROM retail_sales_raw
+    WHERE item IS NOT NULL
+) l
+WHERE r.item IS NULL
+  AND r.price_per_unit IS NULL
+  AND l.category = r.category
+  AND l.price_per_unit = ROUND(r.total_spent / r.quantity, 1);
+```
+
+Then, let's verify once again if there are still missing values in the Item feature.
+
+<p align = "center">
+  <img width="1042" height="213" alt="image" src="https://github.com/user-attachments/assets/c340f495-59d2-4563-866d-5593417486d1" />
+</p>
+
+It can be seen that there are no longer any missing values in the Item feature. By first deriving the missing Price Per Unit values using the Quantity and Total Spent features, we were also able to infer and impute the corresponding Item values in the same update.
