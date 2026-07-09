@@ -25,6 +25,7 @@ Since the count matches our dataset, we can safely assume the import was success
 <img width="1452" height="203" alt="image" src="https://github.com/user-attachments/assets/a9214f1a-1d0e-4d32-a9ea-c57d7191ee46" />
 
 ## Transform
+### Duplicates
 - After obtaining the dataset, the first step should be assessing the data quality by checking for duplicates. By using the **COUNT** function, duplicate valeus can be identified and investigated. In this specific dataset, Transaction_ID seems to be the unique identifier, so it is useful to know if there are duplicated values of data points in that column. The reasoning I have for this is that
 
   - Customer_ID may contain duplicate values because a customer can make multiple purchases over time.
@@ -43,6 +44,7 @@ Since the count matches our dataset, we can safely assume the import was success
 
 This verifies that there are no duplicate values and therefore we can move to the next step.
 
+### Missing values
 - For the next step of data assessment, we check for missing values across all features in the dataset.
 <img width="1457" height="95" alt="image" src="https://github.com/user-attachments/assets/bdf1b4a7-9d2a-44cc-b950-ad210165e282" />
 
@@ -62,7 +64,8 @@ As shown in the results, the features Item, Price_Per_Unit, Quantity, Total_Spen
   - Price Per Unit can be inferred from the Item column. Ex. Category is Patisserie and Item_10_PAT price per unit is 18.5 so all item_10_pat have price of 18.5
   - Item values may also be inferred using a combination of Category and Price Per Unit. For example, a record in the Patisserie category with a price per unit of 18.5 can be assigned the item value Item_10_PAT.
   - For now, I would skip the Discount_Applied feature and come back to it later. My hope is that some of the inconsistencies observed so far can be explained once the relationships between Item, Price Per Unit, Quantity, and Total Spent have been fully established.
-  
+
+#### Missing values - Item feature  
 From the observations thus far, the easiest issue to address is the relationship between Item and Price_Per_Unit. The hypothesis is that each Item corresponds to a single price. To verify this, a query was executed to identify any items associated with more than one distinct price.
 
  <p align = "center">
@@ -134,6 +137,7 @@ WHERE r.item IS NULL
   <img width="655" height="147" alt="image" src="https://github.com/user-attachments/assets/ffca0ce4-ee0a-42b0-b136-febdb5e861ab" />
 </p>
 
+#### Missing values - Item & Price Per Unit
 From 1,213 missing values, we were able to reduce it to only 609. This means that 604 missing values were successfully imputed. The remaining 609 rows could not be imputed for now since they also have missing Price Per Unit values, which we need to determine the corresponding item.
 
 Now let's check for the table again and let's see what we can do from our current information.
@@ -191,3 +195,65 @@ Then, let's verify once again if there are still missing values in the Item feat
 </p>
 
 It can be seen that there are no longer any missing values in the Item feature. By first deriving the missing Price Per Unit values using the Quantity and Total Spent features, we were also able to infer and impute the corresponding Item values in the same update.
+
+#### Missing Values - Quantity and Total Spent
+Now regarding the missing values of both Quantity and Total Spent, there are a lot of imputation techniques I am considering:
+  - Mean : One of the common imputation techniques when it comes to numerical datasets. However, I do not think this technique is appropriate since it is affected by outliers, and the resulting values would only be estimates rather than the actual values.
+  - Mode : Another possible technique is to use the most frequently occurring quantity for each item. However, this assumes that the missing transactions follow the same purchasing behavior as the existing records, which cannot be verified.
+  - Median : This is less affected by outliers compared to the mean and is generally a better choice for numerical imputation. However, similar to the previous techniques, the imputed values would still only be estimates and not the actual values.
+  - Drop : For now, I think dropping these records would be the best choice since there is really no information to go off on when dealing with the missing values of these features. Unlike the previous missing values, these cannot be derived with certainty. I also think that completeness should not come at the expense of data integrity, especially if it could affect the later analysis.
+
+```sql
+DELETE FROM retail_sales_raw
+WHERE quantity IS NULL
+  AND total_spent IS NULL;
+```
+
+And verify:
+<p align = "center">
+  <img width="803" height="202" alt="image" src="https://github.com/user-attachments/assets/0ec80161-d5bb-495a-9496-9a45edd89d7b" />
+</p>
+
+Since we dropped 604 datapoints we are left with only 11,971 datapoints.
+
+Next is converting the Transaction Date feature to a DATE data type as it would be crucial to our next step of preprocessing.
+```sql
+ALTER TABLE retail_sales_raw
+ALTER COLUMN transaction_date
+TYPE DATE
+USING transaction_date::DATE;
+```
+
+#### Missing Values - Discount Applied
+Now moving on to Discount Applied, I tried to formulate different hypotheses that might explain how a customer receives a discount.
+  - Quantity – Perhaps customers receive a discount when they buy more items.
+    - <img width="590" height="401" alt="image" src="https://github.com/user-attachments/assets/c2969512-0c7c-4986-906e-64292e93cec3" />
+    - Which seems to not be the case as the discount rate still stays around 50% even as the quantity goes up.
+  
+  - Payment Method – Another possibility is that the payment method determines whether a discount is applied.
+    - <img width="642" height="226" alt="image" src="https://github.com/user-attachments/assets/2dce88e5-4eb1-4938-97c8-d374661319e5" />
+    - Which also does not seem to be the case as all payment methods have nearly the same discount rate.
+    
+  - Location - It could also be that online purchases receive more discounts compared to in-store purchases.
+    - <img width="587" height="131" alt="image" src="https://github.com/user-attachments/assets/b93d29bf-104d-4150-a662-f372bf340776" />
+    - Which does not seem to be the case as the discount rate is almost a 50/50 split.
+    
+  - Transaction Date - Another hypothesis is that discounts are offered seasonally, such as during Christmas.
+    - <img width="612" height="412" alt="image" src="https://github.com/user-attachments/assets/5fe3755c-8a87-451b-91b4-68920d12b0c4" />
+    - Which also does not seem to be the case as the highest discount rate is only 53.66% in September.
+
+  - Total Spent - Lastly, customers who spend above a certain amount may have a higher chance of receiving a discount.
+    - <img width="642" height="280" alt="image" src="https://github.com/user-attachments/assets/f37e9b23-6047-4e4e-8148-b4a9a8deafc8" />
+    - Which also does not seem to be the case as customers who spent 300+ only have a 52.05% discount rate.
+
+After exploring different hypotheses, none of them showed a strong enough relationship with Discount Applied. The discount rate consistently stayed around 50% regardless of the quantity purchased, payment method, location, transaction date, or total amount spent.
+
+Because of this, there is not enough evidence to confidently infer whether a missing value should be True or False. Rather than filling these missing values with unsupported assumptions, I decided to label them as Unknown. Since this feature contains 3,988 missing values, I believe this is a better approach than dropping those records altogether. It also makes the dataset easier to analyze and visualize later on, as Unknown can be treated as its own category instead of being ignored.
+
+```sql
+UPDATE retail_sales_raw
+SET discount_applied = 'Unknown'
+WHERE discount_applied IS NULL;
+```
+
+<img width="450" height="237" alt="image" src="https://github.com/user-attachments/assets/b8c23909-e05e-42f1-afe2-20b9df0680b9" />
