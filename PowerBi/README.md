@@ -157,6 +157,8 @@ To further validate this in Power BI, we can visualize some of these hypotheses.
 
 From the results, it appears that there is still no meaningful relationship that can be used to infer the missing values in Discount Applied. The proportion of True and False remains close to 50% regardless of the feature being analyzed.
 
+<img width="1145" height="455" alt="image" src="https://github.com/user-attachments/assets/a9b665df-bdf4-4406-9a3d-140d1159500d" />
+
 Because there is insufficient evidence to reliably predict whether a missing value should be True or False, the missing values were left unchanged. Imputing them would introduce unsupported assumptions into the dataset, while removing nearly 4,000 records would result in unnecessary data loss. Therefore, the feature was kept in its original Boolean format with the missing values preserved.
 
 ## Load
